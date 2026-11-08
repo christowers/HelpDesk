@@ -30,6 +30,7 @@ else
     throw new InvalidOperationException("Database:Provider must be Sqlite or SqlServer.");
 }
 builder.Services.AddScoped<PolicyStore>();
+builder.Services.AddScoped<SoftwareCatalog>();
 
 var mode = builder.Configuration["HelpDesk:Mode"] ?? "OpenAI";
 switch (mode.ToLowerInvariant())

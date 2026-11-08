@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using HelpDesk.Api;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -34,20 +36,89 @@ public sealed class HelpDeskEndpointTests : IClassFixture<HelpDeskApplication>
         Assert.Contains(ZoomQuestion, page);
     }
 
-    [Fact]
-    public async Task Zoom_answer_cites_the_rule_and_leaves_catalog_status_unknown()
+    [Theory]
+    [InlineData(ZoomQuestion, "Zoom is approved in the software catalog", "You may install it")]
+    [InlineData("May I install BLENDER on the company desktop?", "lists Blender as requiring IT approval", "Get approval before installing it")]
+    public async Task Installation_answer_uses_verified_catalog_status(string question, string status, string instruction)
     {
         using var client = _app.CreateClient();
-        using var response = await client.PostAsJsonAsync(Route, new AskRequest(ZoomQuestion));
-
+        using var response = await client.PostAsJsonAsync(Route, new AskRequest(question));
         response.EnsureSuccessStatusCode();
         Assert.Equal("Offline", Assert.Single(response.Headers.GetValues("X-HelpDesk-Mode")));
         var answer = Assert.IsType<PolicyAnswer>(await response.Content.ReadFromJsonAsync<PolicyAnswer>());
+        Assert.False(answer.InsufficientInformation);
+        Assert.Equal("IT Policy §4.2", answer.Citation);
+        Assert.Contains(status, answer.Answer);
+        Assert.Contains(instruction, answer.Answer);
+    }
+
+    [Theory]
+    [InlineData("Can I install ScreenFlow on my work laptop?")]
+    [InlineData("Can I install Zoom Phone on my work laptop?")]
+    [InlineData("Can I install Zoom and Blender on my work laptop?")]
+    public async Task Unverified_product_gets_the_conditional_rule(string question)
+    {
+        using var app = _app.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<IPolicyModel>(new UnexpectedModel()))));
+        using var client = app.CreateClient();
+        using var response = await client.PostAsJsonAsync(Route, new AskRequest(question));
+
+        var answer = await ReadConditionalInstallationAnswerAsync(response);
+        Assert.Contains("couldn't verify that product", answer.Answer);
+    }
+
+    [Fact]
+    public async Task Unavailable_catalog_gets_the_conditional_rule()
+    {
+        using var fixture = new HelpDeskApplication();
+        using var app = fixture.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("Database:Provider", "Sqlite");
+            builder.UseSetting("HelpDesk:Mode", "Offline");
+            builder.ConfigureServices(services =>
+                services.Replace(ServiceDescriptor.Singleton<IPolicyModel>(new UnexpectedModel())));
+        });
+        using var client = app.CreateClient();
+        var databasePath = app.Services.GetRequiredService<IConfiguration>()["Database:SqlitePath"];
+        Assert.NotNull(databasePath);
+        var connectionString = new SqliteConnectionStringBuilder { DataSource = databasePath }.ToString();
+        await using (var connection = new SqliteConnection(connectionString))
+        {
+            await connection.OpenAsync();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DROP TABLE SoftwareCatalog";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        using var response = await client.PostAsJsonAsync(Route, new AskRequest(ZoomQuestion));
+
+        var answer = await ReadConditionalInstallationAnswerAsync(response);
+        Assert.Contains("catalog is unavailable", answer.Answer);
+    }
+
+    [Fact]
+    public async Task Verified_catalog_entry_reaches_the_model_with_the_policy()
+    {
+        using var app = _app.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
+            services.Replace(ServiceDescriptor.Singleton<IPolicyModel>(new CatalogCheckingModel()))));
+        using var client = app.CreateClient();
+        using var response = await client.PostAsJsonAsync(Route, new AskRequest(ZoomQuestion));
+
+        response.EnsureSuccessStatusCode();
+        var answer = Assert.IsType<PolicyAnswer>(await response.Content.ReadFromJsonAsync<PolicyAnswer>());
+        Assert.False(answer.InsufficientInformation);
+        Assert.Equal("IT Policy §4.2", answer.Citation);
+    }
+
+    private static async Task<PolicyAnswer> ReadConditionalInstallationAnswerAsync(HttpResponseMessage response)
+    {
+        response.EnsureSuccessStatusCode();
+        var answer = Assert.IsType<PolicyAnswer>(await response.Content.ReadFromJsonAsync<PolicyAnswer>());
         Assert.True(answer.InsufficientInformation);
         Assert.Equal("IT Policy §4.2", answer.Citation);
-        Assert.Contains("does not say whether Zoom", answer.Answer);
-        Assert.Contains("If Zoom is listed, you may install it", answer.Answer);
-        Assert.Contains("If it is not listed, get IT approval first", answer.Answer);
+        Assert.Contains("If the software is listed in the approved catalog, you may install it on your work computer.", answer.Answer);
+        Assert.Contains("Otherwise, get IT approval first.", answer.Answer);
+        return answer;
     }
 
     [Fact]
@@ -107,11 +178,24 @@ public sealed class HelpDeskEndpointTests : IClassFixture<HelpDeskApplication>
         Assert.Null(answer.Citation);
     }
 
+    private sealed class CatalogCheckingModel : IPolicyModel
+    {
+        public Task<PolicyAnswer> AnswerAsync(
+            string question, PolicyExcerpt excerpt, CancellationToken cancellationToken)
+        {
+            Assert.Equal(ZoomQuestion, question);
+            Assert.Equal("IT Policy §4.2", excerpt.Citation);
+            Assert.Equal(new SoftwareCatalogEntry("Zoom", IsApproved: true), excerpt.SoftwareCatalogEntry);
+            return Task.FromResult(new PolicyAnswer("Zoom is approved in the software catalog.", excerpt.Citation,
+                InsufficientInformation: false));
+        }
+    }
+
     private sealed class UnexpectedModel : IPolicyModel
     {
         public Task<PolicyAnswer> AnswerAsync(
             string question, PolicyExcerpt excerpt, CancellationToken cancellationToken) =>
-            throw new InvalidOperationException("The model must not run without a policy match.");
+            throw new InvalidOperationException("The model must not run for this fallback.");
     }
 
 

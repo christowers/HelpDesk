@@ -51,5 +51,25 @@ WHERE NOT EXISTS (
     WHERE existing.Citation = seed.Citation
 );
 
+IF OBJECT_ID(N'dbo.SoftwareCatalog', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.SoftwareCatalog (
+        CatalogKey nvarchar(160) NOT NULL CONSTRAINT PK_SoftwareCatalog PRIMARY KEY,
+        Product nvarchar(160) NOT NULL,
+        IsApproved bit NOT NULL
+    );
+END;
+
+INSERT INTO dbo.SoftwareCatalog (CatalogKey, Product, IsApproved)
+SELECT seed.CatalogKey, seed.Product, seed.IsApproved
+FROM (VALUES
+    (N'zoom', N'Zoom', 1),
+    (N'blender', N'Blender', 0)
+) AS seed (CatalogKey, Product, IsApproved)
+WHERE NOT EXISTS (
+    SELECT 1 FROM dbo.SoftwareCatalog AS existing WITH (UPDLOCK, HOLDLOCK)
+    WHERE existing.CatalogKey = seed.CatalogKey
+);
+
 COMMIT TRANSACTION;
 GO

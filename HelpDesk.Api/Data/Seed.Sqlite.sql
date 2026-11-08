@@ -33,3 +33,15 @@ INSERT INTO Policies (Citation, Question, Answer, Keywords, InsufficientInformat
 SELECT Citation, Question, Answer, Keywords, InsufficientInformation
 FROM sample
 WHERE NOT EXISTS (SELECT 1 FROM Policies);
+
+CREATE TABLE IF NOT EXISTS SoftwareCatalog (
+    CatalogKey TEXT NOT NULL PRIMARY KEY,
+    Product TEXT NOT NULL,
+    IsApproved INTEGER NOT NULL CHECK (IsApproved IN (0, 1))
+);
+
+INSERT INTO SoftwareCatalog (CatalogKey, Product, IsApproved)
+VALUES
+    ('zoom', 'Zoom', 1),
+    ('blender', 'Blender', 0)
+ON CONFLICT (CatalogKey) DO NOTHING;

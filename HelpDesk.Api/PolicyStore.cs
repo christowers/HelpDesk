@@ -5,6 +5,13 @@ namespace HelpDesk.Api;
 
 internal sealed class PolicyStore(PolicyDbContext database)
 {
+    public Task<PolicyExcerpt?> FindByCitationAsync(string citation, CancellationToken cancellationToken) =>
+        database.Policies
+            .Where(policy => policy.Citation == citation)
+            .Select(policy => new PolicyExcerpt(policy.Citation, policy.Answer, policy.Question,
+                policy.InsufficientInformation))
+            .SingleOrDefaultAsync(cancellationToken);
+
     public async Task<PolicyExcerpt?> FindBestMatchAsync(string question, CancellationToken cancellationToken)
     {
         var normalizedQuestion = question.ToLowerInvariant();

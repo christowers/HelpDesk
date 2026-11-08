@@ -6,11 +6,14 @@ namespace HelpDesk.Api;
 internal sealed class PolicyDbContext(DbContextOptions<PolicyDbContext> options) : DbContext(options)
 {
     public DbSet<Policy> Policies => Set<Policy>();
+    public DbSet<SoftwareCatalogItem> SoftwareCatalog => Set<SoftwareCatalogItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        var schema = Database.IsSqlServer() ? "dbo" : null;
         var policies = modelBuilder.Entity<Policy>();
-        policies.ToTable("Policies", Database.IsSqlServer() ? "dbo" : null);
+        policies.ToTable("Policies", schema);
+        modelBuilder.Entity<SoftwareCatalogItem>().ToTable("SoftwareCatalog", schema);
         policies.HasIndex(policy => policy.Question).IsUnique();
     }
 
