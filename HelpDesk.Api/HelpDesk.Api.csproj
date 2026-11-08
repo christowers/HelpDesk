@@ -11,5 +11,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.14" />
     <EmbeddedResource Include="Data/Seed.Sqlite.sql" />
     <None Update="Data/Seed.sql" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 </Project>
