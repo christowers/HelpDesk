@@ -1,0 +1,19 @@
+{
+  "profiles": {
+    "HelpDesk.Api": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5137"
+    },
+    "HelpDesk.Api (Offline)": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://localhost:5137",
+      "environmentVariables": {
+        "HelpDesk__Mode": "Offline"
+      }
+    }
+  }
+}

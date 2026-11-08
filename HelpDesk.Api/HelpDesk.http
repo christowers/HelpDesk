@@ -1,0 +1,41 @@
+@baseUrl = http://localhost:5137
+
+### Software installation
+POST {{baseUrl}}/api/helpdesk/ask
+Content-Type: application/json
+
+{
+  "question": "Can I install Zoom on my work laptop?"
+}
+
+### Initial help desk response time
+POST {{baseUrl}}/api/helpdesk/ask
+Content-Type: application/json
+
+{
+  "question": "How long does it take help desk to reply to my request?"
+}
+
+### Software approval turnaround
+POST {{baseUrl}}/api/helpdesk/ask
+Content-Type: application/json
+
+{
+  "question": "How long does it take IT to approve a software request?"
+}
+
+### No matching policy
+POST {{baseUrl}}/api/helpdesk/ask
+Content-Type: application/json
+
+{
+  "question": "What is on the cafeteria menu?"
+}
+
+### Invalid input (HTTP 400)
+POST {{baseUrl}}/api/helpdesk/ask
+Content-Type: application/json
+
+{
+  "question": " "
+}

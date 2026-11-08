@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HelpDesk · IT Help Desk</title>
+    <style>
+        :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+        body { margin: 0; padding: clamp(1rem, 5vw, 4rem); line-height: 1.55; }
+        main { max-width: 42rem; margin-inline: auto; }
+        h1 { margin-block: 0 .5rem; }
+        label { display: block; font-weight: 600; }
+        textarea {
+            display: block; width: 100%; box-sizing: border-box; min-height: 5rem;
+            margin-block: .4rem 1rem; padding: .7rem; font: inherit; resize: vertical;
+        }
+        button { padding: .55rem 1rem; font: inherit; cursor: pointer; }
+        #result { margin-block: 1.5rem; }
+        #metadata { font-size: .9rem; }
+        details { border-top: 1px solid GrayText; padding-block: 1rem; }
+        summary { cursor: pointer; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>IT Help Desk</h1>
+    <p>Ask a question about the fictional IT policies. The app searches local SQL Server for the best match. Offline mode shows the retrieved policy directly.</p>
+
+    <form id="ask-form">
+        <label for="question">Your question</label>
+        <textarea id="question" name="question" required maxlength="1000">Can I install Zoom on my work laptop?</textarea>
+        <button type="submit">Ask the help desk</button>
+    </form>
+
+    <div id="result" role="status">
+        <p id="answer"></p>
+        <p id="metadata"></p>
+    </div>
+
+    <details>
+        <summary>Example questions and what to check</summary>
+        <p>Look for both branches of the installation rule, a citation to IT Policy §4.2,
+           and an acknowledgment that the excerpt leaves Zoom’s catalog status unknown.</p>
+        <p>Compare “How long does it take help desk to reply to my request?” with
+           “How long does it take IT to approve a software request?”</p>
+    </details>
+</main>
+
+<script>
+    const form = document.querySelector("#ask-form");
+    const question = document.querySelector("#question");
+    const button = form.querySelector("button");
+    const answer = document.querySelector("#answer");
+    const metadata = document.querySelector("#metadata");
+
+    question.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+
+        event.preventDefault();
+        if (!event.repeat && !button.disabled) {
+            form.requestSubmit(button);
+        }
+    });
+
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (button.disabled) return;
+
+        const text = question.value.trim();
+        metadata.textContent = "";
+        if (!text) {
+            answer.textContent = "Enter a question.";
+            question.focus();
+            return;
+        }
+
+        button.disabled = true;
+        answer.textContent = "Waiting for the answer…";
+
+        try {
+            const response = await fetch("/api/helpdesk/ask", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ question: text })
+            });
+
+            if (!response.ok) {
+                const problem = await response.json().catch(() => null);
+                answer.textContent = problem?.errors?.question?.[0] ?? problem?.title
+                    ?? "The help desk returned an error.";
+                return;
+            }
+
+            const result = await response.json();
+            answer.textContent = result.answer;
+            const details = [response.headers.get("X-HelpDesk-Mode"), result.citation];
+            if (result.insufficientInformation) details.push("Insufficient information");
+            metadata.textContent = details.filter(Boolean).join(" · ");
+        } catch {
+            answer.textContent = "Could not load an answer. Check that the app is running and try again.";
+        } finally {
+            button.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
